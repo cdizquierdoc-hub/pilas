@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Generador de piezas promo</title>
+<title>PILAS</title>
+<link rel="icon" href="data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'><rect%20width='32'%20height='32'%20rx='7'%20fill='%2364489D'/><rect%20x='5.5'%20y='9.5'%20width='18'%20height='13'%20rx='3'%20fill='none'%20stroke='%23fff'%20stroke-width='2.4'/><rect%20x='25'%20y='13.5'%20width='3.5'%20height='5'%20rx='1.2'%20fill='%23fff'/><rect%20x='8.5'%20y='12.5'%20width='8.5'%20height='7'%20rx='1.2'%20fill='%23FF453C'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@200;400;500;600;700&family=REM:wght@300;400;500;600;700;800&family=Bebas+Neue&family=Montserrat:wght@400;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap">
@@ -3127,7 +3128,9 @@ function addPhotos(files) {
   }
   matchAssets(); refreshAfterPhotos();
   const withP = state.rows.filter(r => r.photoFile).length;
-  toast(n ? `${n} ${n === 1 ? 'foto agregada' : 'fotos agregadas'}. ${withP} de ${state.rows.length} productos tienen foto.` : 'No encontré imágenes PNG, JPG o WebP en lo que elegiste.');
+  // Que quede claro desde el primer momento: lo que se sube vive solo en esta sesión
+  // mientras no se guarde dentro del archivo.
+  toast(n ? `${n} ${n === 1 ? 'foto agregada' : 'fotos agregadas'}. ${withP} de ${state.rows.length} productos tienen foto. Son solo para esta vez: para dejarlas fijas, menú Fotos → "Guardar estas fotos dentro de la herramienta".` : 'No encontré imágenes PNG, JPG o WebP en lo que elegiste.');
 }
 function findPhoto(modelo) {
   return buscarEn(state.photos, modelo) || buscarEn(state.fotosBanco, modelo);
