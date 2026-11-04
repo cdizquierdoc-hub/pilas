@@ -1,0 +1,26 @@
+# Un despliegue de Pages quedo colgado en "en progreso" y bloquea a los siguientes.
+# Desde aqui si se puede cancelar: el token del workflow tiene permiso sobre Pages.
+name: Destrabar Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit del despliegue atascado
+        required: true
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  destrabar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancelar el despliegue atascado
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Cancelando ${{ inputs.sha }}"
+          gh api -X POST "repos/${{ github.repository }}/pages/deployments/${{ inputs.sha }}/cancel" \
+            && echo "cancelado" || echo "no se pudo cancelar (sigue el detalle arriba)"
