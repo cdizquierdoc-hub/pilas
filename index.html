@@ -41,6 +41,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .topbar .brand p{margin-top:1px;font-size:12.5px;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topbar .brand-logo{height:30px}
 .topbar .tab{padding:7px 14px}
+.topbar .ver{font:600 11px/1 Arial,sans-serif;color:rgba(255,255,255,.45);white-space:nowrap}
 .topbar .brand h1{color:#fff}
 .topbar .brand p{color:rgba(255,255,255,.72)}
 .topbar .chipbtn{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.26);color:#fff}
@@ -321,6 +322,7 @@ dialog::backdrop{background:rgba(8,14,28,.62)}
   <div class="quick">
     <button class="chipbtn" id="btnPhotos" aria-haspopup="true">Fotos <b id="cntPhotos">0</b></button>
     <button class="chipbtn" id="btnLogos" aria-haspopup="true">Logos <b id="cntLogos">0</b></button>
+    <span class="ver" id="verApp" title="Cuándo se armó esta versión"></span>
   </div>
   <nav class="tabs" role="tablist" aria-label="Secciones">
     <button class="tab" role="tab" id="tabGen" aria-selected="true" aria-controls="viewGen">Generar piezas</button>
@@ -1327,6 +1329,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
+const VERSION_APP = '4 nov 17:38';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -5696,6 +5699,7 @@ async function init() {
   // El código se guarda ahora, tal como vino, antes de que la pantalla lo cambie:
   // es lo que se reescribe cuando se agregan fotos al banco.
   guardarFuente();
+  const elVer = $('#verApp'); if (elVer) elVer.textContent = VERSION_APP;
   getDownloads().then(dl => {
     if (dl || !hasHost()) return;
     const h = $('#dlHint');
