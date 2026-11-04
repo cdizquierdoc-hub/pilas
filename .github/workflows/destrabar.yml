@@ -1,14 +1,10 @@
-# Un despliegue de Pages quedo colgado en "en progreso" y bloquea a los siguientes.
-# Desde aqui si se puede consultar y cancelar: el token del workflow tiene permiso
-# sobre Pages, que es justo lo que no se alcanza desde fuera.
+# Pages se queda en "errored" y entonces ningun despliegue nuevo entra. Desde un
+# workflow si se alcanza la API de Pages (el token trae pages=write), asi que desde
+# aqui se consulta el estado y se pide una construccion limpia.
 name: Destrabar Pages
 
 on:
   workflow_dispatch:
-    inputs:
-      sha:
-        description: Commit del despliegue atascado
-        required: true
 
 permissions:
   pages: write
@@ -18,18 +14,20 @@ jobs:
   destrabar:
     runs-on: ubuntu-latest
     steps:
-      - name: Mirar, cancelar y volver a mirar
+      - name: Pedir una construccion limpia
         env:
           GH_TOKEN: ${{ github.token }}
           R: ${{ github.repository }}
-          S: ${{ inputs.sha }}
         run: |
-          echo "=== estado del despliegue atascado"
-          gh api "repos/$R/pages/deployments/$S" || echo "(no se pudo consultar)"
-          echo "=== ultimo despliegue del sitio"
-          gh api "repos/$R/pages" --jq '{status,html_url,build_type,source}' || echo "(no se pudo)"
-          echo "=== cancelando"
-          gh api -X POST "repos/$R/pages/deployments/$S/cancel" -i || echo "(fallo el cancel)"
-          sleep 10
-          echo "=== estado despues de cancelar"
-          gh api "repos/$R/pages/deployments/$S" || echo "(no se pudo consultar)"
+          echo "=== antes"
+          gh api "repos/$R/pages" --jq '{status,build_type}'
+          echo "=== pidiendo construccion"
+          gh api -X POST "repos/$R/pages/builds" || echo "(no se pudo pedir)"
+          for i in $(seq 1 40); do
+            sleep 15
+            E=$(gh api "repos/$R/pages/builds/latest" --jq '"\(.status) \(.error.message // "")"')
+            echo "  intento $i: $E"
+            case "$E" in built*) echo "=== LISTO"; break;; errored*) echo "=== FALLO"; break;; esac
+          done
+          echo "=== despues"
+          gh api "repos/$R/pages" --jq '{status,build_type,html_url}'
