@@ -20,14 +20,16 @@ Japón, MultiNOVA, Motozone y Pagamenos.
 
 ## Qué lleva adentro
 
-Es **un solo archivo HTML**, sin servidor y sin instalación. Todo va embebido:
+Sin servidor y sin instalación. El sitio son dos archivos:
 
-- 490 códigos con foto de producto, en WebP con fondo transparente.
-- Los logos de las marcas del grupo.
-- El maestro de productos, para completar lo que la lámina no imprime.
+- **`index.html`** (1,3 MB comprimido): el programa, los logos de las marcas, el
+  maestro de productos y TV Wall Studio.
+- **`fotos.zip`** (9,2 MB): el banco de fotos de producto, en WebP con fondo
+  transparente. Se baja una vez y queda en caché, así que arreglar algo del
+  código no obliga a nadie a bajarlo de nuevo.
 
-Por eso también funciona sin internet: basta con descargar `index.html` y
-abrirlo con doble clic.
+Para usarlo **sin internet**, el menú **Fotos → «Descargar copia para usar sin
+internet»** arma un único HTML con todo adentro, que se abre con doble clic.
 
 ## Cómo agregar fotos
 
@@ -35,16 +37,17 @@ Las fotos que faltan no necesitan una versión nueva de la herramienta:
 
 1. En el menú **Fotos**, sube las imágenes nombradas por código
    (`SHN-150IRON-QVV-W.png`), mejor en PNG con fondo transparente.
-2. Elige **«Guardar estas fotos dentro de la herramienta»**.
-3. Se descarga una copia de PILAS con esas fotos ya adentro.
+2. Elige **«Guardar estas fotos en el banco»**.
+3. Se descarga un `fotos.zip` nuevo. Súbelo al repositorio reemplazando el que
+   está: el `index.html` no cambia, así que nadie vuelve a bajarlo.
 
 PILAS las deja como las del banco: recortadas al producto, a 560 px por el lado
 mayor y comprimidas en WebP.
 
 ## Cómo se actualiza el link
 
-Cada push de `index.html` a `main` dispara el workflow de
-[`.github/workflows/publicar.yml`](.github/workflows/publicar.yml), que vuelve a
-publicar el sitio. No hay nada que hacer a mano.
+GitHub Pages republica el sitio en cada push a `main`. No hay nada que hacer a
+mano.
 
-La primera visita descarga unos 15 MB; después queda en caché del navegador.
+La primera visita descarga unos 10,5 MB entre las dos piezas; de ahí en adelante
+abre al instante, y una corrección del código son 1,3 MB.
