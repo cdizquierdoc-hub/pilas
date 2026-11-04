@@ -1,6 +1,5 @@
-# Pages se queda en "errored" y entonces ningun despliegue nuevo entra. Desde un
-# workflow si se alcanza la API de Pages (el token trae pages=write), asi que desde
-# aqui se consulta el estado y se pide una construccion limpia.
+# Comprueba que lo que el sitio sirve de verdad sea la version que esta en main.
+# El runner si alcanza github.io; esta sesion no.
 name: Destrabar Pages
 
 on:
@@ -14,20 +13,19 @@ jobs:
   destrabar:
     runs-on: ubuntu-latest
     steps:
-      - name: Pedir una construccion limpia
+      - name: Estado y verificacion
         env:
           GH_TOKEN: ${{ github.token }}
           R: ${{ github.repository }}
         run: |
-          echo "=== antes"
-          gh api "repos/$R/pages" --jq '{status,build_type}'
-          echo "=== pidiendo construccion"
-          gh api -X POST "repos/$R/pages/builds" || echo "(no se pudo pedir)"
-          for i in $(seq 1 40); do
-            sleep 15
-            E=$(gh api "repos/$R/pages/builds/latest" --jq '"\(.status) \(.error.message // "")"')
-            echo "  intento $i: $E"
-            case "$E" in built*) echo "=== LISTO"; break;; errored*) echo "=== FALLO"; break;; esac
-          done
-          echo "=== despues"
-          gh api "repos/$R/pages" --jq '{status,build_type,html_url}'
+          gh api "repos/$R/pages" --jq '"sitio: \(.status) · \(.html_url)"'
+          gh api "repos/$R/pages/builds/latest" --jq '"ultima construccion: \(.status) · commit \(.commit[0:7]) · \(.created_at)"'
+          U=$(gh api "repos/$R/pages" --jq .html_url)
+          echo "=== bajando $U"
+          curl -sS -o pagina.html -w "HTTP %{http_code} · %{size_download} bytes\n" "$U"
+          echo "=== que trae"
+          grep -o "const VERSION_APP = '[^']*'" pagina.html || echo "  SIN sello de version (es una copia vieja)"
+          grep -c "TVWALL2" pagina.html | sed 's/^/  TVWALL2 aparece /' || true
+          grep -o "versión <b>v[0-9]*</b>" pagina.html | head -1 || echo "  SIN marca de version del marcador"
+          echo "=== fotos.zip"
+          curl -sS -o /dev/null -w "  HTTP %{http_code} · %{size_download} bytes\n" "${U}fotos.zip"
