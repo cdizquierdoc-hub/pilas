@@ -1,5 +1,6 @@
 # Un despliegue de Pages quedo colgado en "en progreso" y bloquea a los siguientes.
-# Desde aqui si se puede cancelar: el token del workflow tiene permiso sobre Pages.
+# Desde aqui si se puede consultar y cancelar: el token del workflow tiene permiso
+# sobre Pages, que es justo lo que no se alcanza desde fuera.
 name: Destrabar Pages
 
 on:
@@ -17,10 +18,18 @@ jobs:
   destrabar:
     runs-on: ubuntu-latest
     steps:
-      - name: Cancelar el despliegue atascado
+      - name: Mirar, cancelar y volver a mirar
         env:
           GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+          S: ${{ inputs.sha }}
         run: |
-          echo "Cancelando ${{ inputs.sha }}"
-          gh api -X POST "repos/${{ github.repository }}/pages/deployments/${{ inputs.sha }}/cancel" \
-            && echo "cancelado" || echo "no se pudo cancelar (sigue el detalle arriba)"
+          echo "=== estado del despliegue atascado"
+          gh api "repos/$R/pages/deployments/$S" || echo "(no se pudo consultar)"
+          echo "=== ultimo despliegue del sitio"
+          gh api "repos/$R/pages" --jq '{status,html_url,build_type,source}' || echo "(no se pudo)"
+          echo "=== cancelando"
+          gh api -X POST "repos/$R/pages/deployments/$S/cancel" -i || echo "(fallo el cancel)"
+          sleep 10
+          echo "=== estado despues de cancelar"
+          gh api "repos/$R/pages/deployments/$S" || echo "(no se pudo consultar)"
