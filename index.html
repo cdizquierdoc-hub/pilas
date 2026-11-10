@@ -332,6 +332,7 @@ dialog::backdrop{background:rgba(8,14,28,.62)}
   <div class="quick">
     <button class="chipbtn" id="btnPhotos" aria-haspopup="true">Fotos <b id="cntPhotos">0</b></button>
     <button class="chipbtn" id="btnLogos" aria-haspopup="true">Logos <b id="cntLogos">0</b></button>
+    <button class="chipbtn" id="btnGuardarHist" title="Guarda lo que llevas: plantillas, matriz, correcciones y fotos">Guardar en historial</button>
     <button class="chipbtn" id="btnHist" title="Lo que has armado antes">Historial <b id="cntHist">0</b></button>
     <button class="chipbtn" id="btnUsuario" title="Cambiar de persona">👤 <b id="nomUsuario">—</b></button>
     <span class="ver" id="verApp" title="Cuándo se armó esta versión"></span>
@@ -1367,7 +1368,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '10 nov 11:51';
+const VERSION_APP = '10 nov 12:43';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -3090,7 +3091,6 @@ function setMatrix(res, name, isDemo) {
   if (!state.cols.forma) miss.push('FORMA DE PAGO');
   if (!state.cols.precio && !state.cols.cuota) miss.push('PRECIO o CUOTA');
   if (miss.length && !isDemo) toast('No encontré ' + miss.join(' ni ') + '. Revisa los encabezados de la matriz.');
-  if (!restaurando && !isDemo) sesionActual = null;   // matriz nueva, trabajo nuevo
   marcarCambio();
 }
 
@@ -3101,7 +3101,7 @@ function setMatrix(res, name, isDemo) {
    entre computadoras: para eso se exporta la sesión como archivo. */
 const SES_POR_PERSONA = 40;
 const CLAVE_USUARIO = '__usuario';
-let usuarioActual = '', sesionActual = null, restaurando = false, guardaPendiente = null;
+let usuarioActual = '', sesionActual = null, restaurando = false, guardaPendiente = null, cargandoEjemplo = false;
 
 const idTx = (db, modo) => db.transaction(IDB_SES, modo).objectStore(IDB_SES);
 async function sesEscribir(obj) {
@@ -3155,13 +3155,13 @@ function pedirUsuario() {
 }
 
 /* ---------- la foto del momento ---------- */
-function instantaneaSesion() {
+function instantaneaSesion(sinMatriz) {
   const disenos = {};
   for (const f of FORMATOS) for (const k of KINDS) {
     const t = state.disenos[f][k];
     if (t) { (disenos[f] = disenos[f] || {})[k] = serializeTemplate(t); }
   }
-  const filas = state.rows.map(r => {
+  const filas = sinMatriz ? [] : state.rows.map(r => {
     const o = { raw: r.raw };
     if (r.nombre) o.nombre = r.nombre;
     if (r.formatos) o.formatos = r.formatos;
@@ -3170,22 +3170,23 @@ function instantaneaSesion() {
     if (r.mailPick) o.mailPick = r.mailPick;
     return o;
   });
-  return { cadena: state.cadena, formato: state.formato, mxName: state.mxName, columns: state.columns, filas, disenos };
+  return { cadena: state.cadena, formato: state.formato, mxName: sinMatriz ? '' : state.mxName, columns: sinMatriz ? [] : state.columns, filas, disenos };
 }
 const fotosDeSesion = () => [...state.photos.entries()]
   .filter(([k, f]) => k && f && isImageFile(f))
   .map(([clave, f]) => ({ clave, name: f.name || (clave + '.png'), type: f.type || 'image/png', blob: f }));
 
 const tituloPorDefecto = () => {
-  const base = (state.mxName || 'Trabajo').replace(/\.(xlsx?|csv|tsv)$/i, '').slice(0, 60);
+  const sinMatriz = state.isDemo || !state.rows.length;
+  const base = sinMatriz ? 'Plantillas' : (state.mxName || 'Trabajo').replace(/\.(xlsx?|csv|tsv)$/i, '').slice(0, 60);
   return state.cadena ? base + ' · ' + state.cadena : base;
 };
 
 async function guardarSesion(aviso) {
   if (restaurando) return null;
-  // La matriz de ejemplo se carga sola al entrar: no es trabajo de nadie
-  if (state.isDemo) { if (aviso) toast('Esto es la matriz de ejemplo. Carga tu matriz y se guarda sola.'); return null; }
-  if (!state.rows.length && !totalPlantillas()) return null;
+  // La matriz de ejemplo se carga sola al entrar: no se guarda, pero sí las plantillas que cargues
+  const sinMatriz = !!state.isDemo || !state.rows.length;
+  if (sinMatriz && !totalPlantillas()) { if (aviso) toast('Carga tus plantillas o tu matriz para tener algo que guardar.'); return null; }
   const antes = sesionActual ? await sesPorId(sesionActual) : null;
   const ahora = new Date().toISOString();
   const ses = {
@@ -3194,10 +3195,10 @@ async function guardarSesion(aviso) {
     titulo: (antes && antes.titulo) || tituloPorDefecto(),
     creada: (antes && antes.creada) || ahora,
     guardada: ahora,
-    piezas: state.rows.length,
+    piezas: sinMatriz ? 0 : state.rows.length,
     plantillas: totalPlantillas(),
     cadena: state.cadena,
-    datos: instantaneaSesion(),
+    datos: instantaneaSesion(state.isDemo),
     fotos: fotosDeSesion(),
   };
   try {
@@ -3220,10 +3221,12 @@ async function podarSesiones() {
   for (const vieja of mias.slice(SES_POR_PERSONA)) await sesBorrar(vieja.id);
 }
 // Mientras se trabaja se guarda solo, sin que nadie tenga que acordarse
-function marcarCambio() {
-  if (restaurando || state.isDemo) return;
-  clearTimeout(guardaPendiente);
-  guardaPendiente = setTimeout(() => { guardarSesion(false).catch(() => {}); }, 2500);
+// Ya no guarda con cada cambio: solo al cargar plantillas, al descargar imágenes o con el botón.
+function marcarCambio() {}
+// Se llama al cargar plantillas (setTemplate) y al descargar imágenes
+function guardarAl(motivo) {
+  if (restaurando || cargandoEjemplo) return;
+  guardarSesion(false).catch(() => {});
 }
 
 async function abrirSesion(id) {
@@ -3245,10 +3248,9 @@ async function abrirSesion(id) {
     fijarCadena(d.cadena || '');
     if (esFormato(d.formato)) state.formato = d.formato;
     const filas = (d.filas || []).map(f => {
-      const r = { raw: f.raw };
+      const r = { raw: f.raw, include: f.include !== false };
       if (f.nombre) r.nombre = f.nombre;
       if (f.formatos) r.formatos = f.formatos;
-      if (f.include === false) r.include = false;
       if (f.custom) r.custom = f.custom;
       if (f.mailPick) r.mailPick = f.mailPick;
       return r;
@@ -3383,6 +3385,7 @@ async function pintarHistorial() {
 function cablearHistorial() {
   const d = $('#dlgHist'), du = $('#dlgUser');
   $('#btnHist').addEventListener('click', async () => { await pintarHistorial(); if (!d.open) d.showModal(); });
+  $('#btnGuardarHist').addEventListener('click', () => guardarSesion(true));
   $('#dlgHistClose').addEventListener('click', () => d.close());
   $('#btnUsuario').addEventListener('click', pedirUsuario);
   $('#histGuardar').addEventListener('click', () => guardarSesion(true));
@@ -3399,7 +3402,6 @@ function cablearHistorial() {
   $('#userOk').addEventListener('click', entrar);
   $('#userNombre').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); entrar(); } });
   // Guardar lo que haya antes de cerrar la pestaña
-  window.addEventListener('pagehide', () => { if (!restaurando) guardarSesion(false).catch(() => {}); });
   leerUsuario().then(async n => {
     if (n) { await fijarUsuario(n); } else { pedirUsuario(); }
     pintarHistorial();
@@ -4484,6 +4486,7 @@ async function setTemplate(tpl, kind, skipRefresh, formato) {
   state.disenos[fmt][kind] = tpl;
   await ensureFonts();
   if (!skipRefresh) refreshTemplatesUI();
+  guardarAl('plantilla');
 }
 function clearSlot(kind, formato) {
   if (totalPlantillas() <= 1) { toast('Tiene que quedar al menos una plantilla.'); return; }
@@ -6135,10 +6138,10 @@ function wire() {
   for (const id of ['#fileLogoDir', '#fileLogoFiles']) $(id).addEventListener('change', e => { const fs = Array.from(e.target.files); e.target.value = ''; if (fs.length) addLogos(fs); });
   $('#btnAddLogo').addEventListener('click', () => addField('logo'));
   $('#btnAddRegalo').addEventListener('click', () => addField('regalo'));
-  $('#btnGenerate').addEventListener('click', generate);
+  $('#btnGenerate').addEventListener('click', async () => { await generate(); guardarAl('descarga'); });
   $('#btnMail').addEventListener('click', crearMailing);
   $('#btnMailClear').addEventListener('click', limpiarMailPicks);
-  $('#btnMailDl').addEventListener('click', generarMailing);
+  $('#btnMailDl').addEventListener('click', async () => { await generarMailing(); guardarAl('descarga'); });
   $('#pvRow').addEventListener('change', e => { state.previewIdx = +e.target.value || 0; renderEditor(); });
   $('#showBoxes').addEventListener('change', e => $('#stage').classList.toggle('guides-off', !e.target.checked));
   $('#smartGuides').addEventListener('change', e => { state.smartGuides = e.target.checked; });
@@ -6252,9 +6255,12 @@ async function init() {
   cargarCatalogo().then(c => { CAT = c; if (state.rows.length) buildBoard(); }).catch(() => {});
   cargarBancoFotos().then(b => { state.fotosBanco = b; matchAssets(); refreshAfterPhotos(); })
     .catch(e => { if (!bancoEmbebido()) toast('No pude cargar el banco de fotos: ' + ((e && e.message) || e)); });
+  // Lo de ejemplo que se carga solo al entrar no es trabajo: no se guarda en el historial
+  cargandoEjemplo = true;
   setMatrix(buildRows(DEMO_AOA), 'la matriz de ejemplo', true);
   try { await loadDemoTemplates(); }
   catch (e) { toast('No se pudo preparar la plantilla de ejemplo: ' + (e.message || e)); }
+  finally { cargandoEjemplo = false; }
   if (typeof XLSX === 'undefined' || typeof JSZip === 'undefined') toast('Algo salió mal al cargar la herramienta. Recarga la página.');
 }
 init();
