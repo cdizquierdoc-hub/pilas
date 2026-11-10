@@ -42,6 +42,15 @@ button,input,select,textarea{font:inherit;color:inherit}
 .topbar .brand-logo{height:30px}
 .topbar .tab{padding:7px 14px}
 .topbar .ver{font:600 11px/1 Arial,sans-serif;color:rgba(255,255,255,.45);white-space:nowrap}
+.hist-body{display:flex;flex-direction:column;gap:10px;min-width:min(680px,86vw)}
+.hist-body #histLista{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto}
+.hist-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.hist-item.hist-actual{border-color:var(--brand);background:#F4F0FC}
+.hist-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hist-txt b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-txt .muted{font-size:12px}
+.user-body{display:flex;flex-direction:column;gap:10px;min-width:min(440px,86vw)}
+.user-body input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:15px}
 .topbar .brand h1{color:#fff}
 .topbar .brand p{color:rgba(255,255,255,.72)}
 .topbar .chipbtn{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.26);color:#fff}
@@ -323,6 +332,8 @@ dialog::backdrop{background:rgba(8,14,28,.62)}
   <div class="quick">
     <button class="chipbtn" id="btnPhotos" aria-haspopup="true">Fotos <b id="cntPhotos">0</b></button>
     <button class="chipbtn" id="btnLogos" aria-haspopup="true">Logos <b id="cntLogos">0</b></button>
+    <button class="chipbtn" id="btnHist" title="Lo que has armado antes">Historial <b id="cntHist">0</b></button>
+    <button class="chipbtn" id="btnUsuario" title="Cambiar de persona">👤 <b id="nomUsuario">—</b></button>
     <span class="ver" id="verApp" title="Cuándo se armó esta versión"></span>
   </div>
   <nav class="tabs" role="tablist" aria-label="Secciones">
@@ -651,6 +662,27 @@ dialog::backdrop{background:rgba(8,14,28,.62)}
   </div>
   <div class="dlg-foot"><span class="muted" id="dlgTxtMeta"></span><div class="row-actions"><button class="btn" id="dlgTxtCopy">Copiar</button><button class="btn btn-ink" id="dlgTxtUse" hidden>Usar esta plantilla</button></div></div>
 </dialog>
+<dialog id="dlgHist" aria-labelledby="dlgHistTitle">
+  <div class="dlg-head"><h3 id="dlgHistTitle">Mi historial</h3><button class="btn" id="dlgHistClose">Cerrar</button></div>
+  <div class="dlg-body hist-body">
+    <p class="muted" id="histInfo"></p>
+    <div id="histLista"></div>
+  </div>
+  <div class="dlg-foot"><span class="muted">Se guarda en este navegador. Para pasarlo a otra computadora, exporta la sesión.</span>
+    <div class="row-actions">
+      <button class="btn" id="histImport">Abrir sesión de un archivo</button>
+      <button class="btn btn-ink" id="histGuardar">Guardar ahora</button>
+    </div></div>
+</dialog>
+<dialog id="dlgUser" aria-labelledby="dlgUserTitle">
+  <div class="dlg-head"><h3 id="dlgUserTitle">¿Quién va a trabajar?</h3></div>
+  <div class="dlg-body user-body">
+    <p class="muted">Tu nombre separa tu historial del de tus compañeros en esta computadora. No es una contraseña ni viaja a ningún lado.</p>
+    <input id="userNombre" type="text" placeholder="Tu nombre" maxlength="40" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="dlg-foot"><span class="muted"></span><div class="row-actions"><button class="btn btn-ink" id="userOk">Entrar</button></div></div>
+</dialog>
+<input type="file" id="fileSes" accept=".zip" hidden>
 <div class="cargando" id="cargando" hidden role="alertdialog" aria-live="assertive" aria-label="Procesando">
   <div class="cargando-caja">
     <div class="ruedita" aria-hidden="true"></div>
@@ -1335,7 +1367,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '5 nov 15:58';
+const VERSION_APP = '10 nov 11:51';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -3058,6 +3090,320 @@ function setMatrix(res, name, isDemo) {
   if (!state.cols.forma) miss.push('FORMA DE PAGO');
   if (!state.cols.precio && !state.cols.cuota) miss.push('PRECIO o CUOTA');
   if (miss.length && !isDemo) toast('No encontré ' + miss.join(' ni ') + '. Revisa los encabezados de la matriz.');
+  if (!restaurando && !isDemo) sesionActual = null;   // matriz nueva, trabajo nuevo
+  marcarCambio();
+}
+
+/* ---------- sesiones de trabajo --------------------------------------------
+   Producto manda correcciones después, a veces al día siguiente. Lo que se guarda es
+   todo lo que cuesta rehacer: las plantillas, la matriz, las correcciones de cada
+   fila y las fotos subidas. Vive en el navegador de cada persona, así que no viaja
+   entre computadoras: para eso se exporta la sesión como archivo. */
+const SES_POR_PERSONA = 40;
+const CLAVE_USUARIO = '__usuario';
+let usuarioActual = '', sesionActual = null, restaurando = false, guardaPendiente = null;
+
+const idTx = (db, modo) => db.transaction(IDB_SES, modo).objectStore(IDB_SES);
+async function sesEscribir(obj) {
+  const db = await idbOpen();
+  const tx = db.transaction(IDB_SES, 'readwrite');
+  tx.objectStore(IDB_SES).put(obj);
+  await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
+  db.close();
+}
+async function sesBorrar(id) {
+  const db = await idbOpen();
+  const tx = db.transaction(IDB_SES, 'readwrite');
+  tx.objectStore(IDB_SES).delete(id);
+  await new Promise(res => { tx.oncomplete = res; tx.onerror = res; });
+  db.close();
+}
+async function sesTodas() {
+  try {
+    const db = await idbOpen();
+    const todo = await idbReq(idTx(db, 'readonly').getAll());
+    db.close();
+    return todo.filter(x => x && x.id !== CLAVE_USUARIO);
+  } catch (e) { return []; }
+}
+async function sesPorId(id) {
+  try {
+    const db = await idbOpen();
+    const v = await idbReq(idTx(db, 'readonly').get(id));
+    db.close();
+    return v || null;
+  } catch (e) { return null; }
+}
+
+/* ---------- quién está trabajando ---------- */
+async function leerUsuario() {
+  const v = await sesPorId(CLAVE_USUARIO);
+  return (v && v.nombre) || '';
+}
+async function fijarUsuario(nombre) {
+  usuarioActual = String(nombre || '').trim().slice(0, 40);
+  const el = $('#nomUsuario'); if (el) el.textContent = usuarioActual || 'sin nombre';
+  try { await sesEscribir({ id: CLAVE_USUARIO, nombre: usuarioActual }); } catch (e) {}
+  pintarHistorial();
+}
+function pedirUsuario() {
+  const d = $('#dlgUser'), inp = $('#userNombre');
+  if (!d) return;
+  inp.value = usuarioActual || '';
+  if (!d.open) d.showModal();
+  setTimeout(() => inp.focus(), 60);
+}
+
+/* ---------- la foto del momento ---------- */
+function instantaneaSesion() {
+  const disenos = {};
+  for (const f of FORMATOS) for (const k of KINDS) {
+    const t = state.disenos[f][k];
+    if (t) { (disenos[f] = disenos[f] || {})[k] = serializeTemplate(t); }
+  }
+  const filas = state.rows.map(r => {
+    const o = { raw: r.raw };
+    if (r.nombre) o.nombre = r.nombre;
+    if (r.formatos) o.formatos = r.formatos;
+    if (r.include === false) o.include = false;
+    if (r.custom) o.custom = r.custom;
+    if (r.mailPick) o.mailPick = r.mailPick;
+    return o;
+  });
+  return { cadena: state.cadena, formato: state.formato, mxName: state.mxName, columns: state.columns, filas, disenos };
+}
+const fotosDeSesion = () => [...state.photos.entries()]
+  .filter(([k, f]) => k && f && isImageFile(f))
+  .map(([clave, f]) => ({ clave, name: f.name || (clave + '.png'), type: f.type || 'image/png', blob: f }));
+
+const tituloPorDefecto = () => {
+  const base = (state.mxName || 'Trabajo').replace(/\.(xlsx?|csv|tsv)$/i, '').slice(0, 60);
+  return state.cadena ? base + ' · ' + state.cadena : base;
+};
+
+async function guardarSesion(aviso) {
+  if (restaurando) return null;
+  // La matriz de ejemplo se carga sola al entrar: no es trabajo de nadie
+  if (state.isDemo) { if (aviso) toast('Esto es la matriz de ejemplo. Carga tu matriz y se guarda sola.'); return null; }
+  if (!state.rows.length && !totalPlantillas()) return null;
+  const antes = sesionActual ? await sesPorId(sesionActual) : null;
+  const ahora = new Date().toISOString();
+  const ses = {
+    id: sesionActual || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+    usuario: usuarioActual,
+    titulo: (antes && antes.titulo) || tituloPorDefecto(),
+    creada: (antes && antes.creada) || ahora,
+    guardada: ahora,
+    piezas: state.rows.length,
+    plantillas: totalPlantillas(),
+    cadena: state.cadena,
+    datos: instantaneaSesion(),
+    fotos: fotosDeSesion(),
+  };
+  try {
+    await sesEscribir(ses);
+    sesionActual = ses.id;
+    await podarSesiones();
+    pintarHistorial();
+    if (aviso) toast(`Guardado: «${ses.titulo}» con ${ses.piezas} productos y ${ses.fotos.length} fotos.`);
+    return ses.id;
+  } catch (e) {
+    if (aviso) toast('No pude guardar el trabajo en este navegador: ' + ((e && e.message) || e));
+    return null;
+  }
+}
+// Que el historial no crezca sin fin: se quedan las más recientes de cada persona
+async function podarSesiones() {
+  const todas = await sesTodas();
+  const mias = todas.filter(x => (x.usuario || '') === usuarioActual)
+    .sort((a, b) => String(b.guardada).localeCompare(String(a.guardada)));
+  for (const vieja of mias.slice(SES_POR_PERSONA)) await sesBorrar(vieja.id);
+}
+// Mientras se trabaja se guarda solo, sin que nadie tenga que acordarse
+function marcarCambio() {
+  if (restaurando || state.isDemo) return;
+  clearTimeout(guardaPendiente);
+  guardaPendiente = setTimeout(() => { guardarSesion(false).catch(() => {}); }, 2500);
+}
+
+async function abrirSesion(id) {
+  const ses = await sesPorId(id);
+  if (!ses || !ses.datos) { toast('Esa sesión ya no está.'); return; }
+  const d = ses.datos;
+  restaurando = true;
+  try {
+    for (const f of FORMATOS) for (const k of KINDS) state.disenos[f][k] = null;
+    const dis = d.disenos || {};
+    let fallaron = 0;
+    for (const f of Object.keys(dis)) for (const k of Object.keys(dis[f])) {
+      try { await setTemplate(dis[f][k], k, true, f); } catch (e) { fallaron++; }
+    }
+    state.photos.clear();
+    for (const ph of ses.fotos || []) {
+      try { state.photos.set(ph.clave, new File([ph.blob], ph.name || (ph.clave + '.png'), { type: ph.type || 'image/png' })); } catch (e) {}
+    }
+    fijarCadena(d.cadena || '');
+    if (esFormato(d.formato)) state.formato = d.formato;
+    const filas = (d.filas || []).map(f => {
+      const r = { raw: f.raw };
+      if (f.nombre) r.nombre = f.nombre;
+      if (f.formatos) r.formatos = f.formatos;
+      if (f.include === false) r.include = false;
+      if (f.custom) r.custom = f.custom;
+      if (f.mailPick) r.mailPick = f.mailPick;
+      return r;
+    });
+    setMatrix({ rows: filas, columns: d.columns || [] }, d.mxName || ses.titulo, false);
+    refreshTemplatesUI(); refreshAfterPhotos();
+    sesionActual = ses.id;
+    const dlg = $('#dlgHist'); if (dlg && dlg.open) dlg.close();
+    toast(`Abriste «${ses.titulo}»: ${filas.length} productos, ${(ses.fotos || []).length} fotos y ${totalPlantillas()} plantillas.`
+      + (fallaron ? ' ' + fallaron + ' plantilla(s) no se pudieron reabrir.' : ''));
+  } catch (e) {
+    toast('No pude reabrir esa sesión: ' + ((e && e.message) || e));
+  } finally {
+    restaurando = false;
+    pintarHistorial();
+  }
+}
+
+/* ---------- llevarse una sesión a otra computadora ---------- */
+async function exportarSesion(id) {
+  const ses = await sesPorId(id);
+  if (!ses) { toast('Esa sesión ya no está.'); return; }
+  try {
+    const zip = new JSZip();
+    const fotos = (ses.fotos || []).map((p, i) => ({ clave: p.clave, archivo: 'fotos/' + String(i).padStart(3, '0') + '-' + (p.name || p.clave) }));
+    (ses.fotos || []).forEach((p, i) => zip.file(fotos[i].archivo, p.blob));
+    zip.file('sesion.json', JSON.stringify({
+      kind: 'pilas-sesion', v: 1, titulo: ses.titulo, usuario: ses.usuario,
+      creada: ses.creada, guardada: ses.guardada, cadena: ses.cadena, datos: ses.datos, fotos,
+    }));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const nombre = 'sesion-' + ses.titulo.replace(/[^\w\s.-]+/g, '').replace(/\s+/g, '-').slice(0, 50) + '.zip';
+    const r = await saveFile(nombre, blob);
+    if (r && r.ok === false) toast(r.msg || 'No se pudo guardar el archivo.');
+    else toast('Se bajó «' + nombre + '». Ábrelo en la otra computadora desde el historial.');
+  } catch (e) { toast('No pude exportar: ' + ((e && e.message) || e)); }
+}
+async function importarSesion(file) {
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const meta = zip.file('sesion.json');
+    if (!meta) throw new Error('Ese archivo no es una sesión de PILAS.');
+    const j = JSON.parse(await meta.async('string'));
+    if (j.kind !== 'pilas-sesion' || !j.datos) throw new Error('Ese archivo no es una sesión de PILAS.');
+    const fotos = [];
+    for (const f of j.fotos || []) {
+      const ent = zip.file(f.archivo);
+      if (ent) fotos.push({ clave: f.clave, name: f.archivo.split('/').pop(), type: '', blob: await ent.async('blob') });
+    }
+    const id = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await sesEscribir({
+      id, usuario: usuarioActual, titulo: j.titulo || 'Sesión importada',
+      creada: j.creada || new Date().toISOString(), guardada: new Date().toISOString(),
+      piezas: (j.datos.filas || []).length, plantillas: 0, cadena: j.cadena || '',
+      datos: j.datos, fotos,
+    });
+    pintarHistorial();
+    toast('Entró «' + (j.titulo || 'Sesión importada') + '». Ábrela desde el historial.');
+  } catch (e) { toast('No pude abrir esa sesión: ' + ((e && e.message) || e)); }
+}
+
+/* ---------- el panel ---------- */
+const cuandoFue = iso => {
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const hoy = new Date(), ayer = new Date(Date.now() - 86400000);
+  const mismo = (a, b) => a.toDateString() === b.toDateString();
+  const hora = d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+  if (mismo(d, hoy)) return 'hoy ' + hora;
+  if (mismo(d, ayer)) return 'ayer ' + hora;
+  return d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short' }) + ' ' + hora;
+};
+
+async function pintarHistorial() {
+  const cont = $('#histLista'), chip = $('#cntHist');
+  const todas = await sesTodas();
+  const mias = todas.filter(x => (x.usuario || '') === usuarioActual)
+    .sort((a, b) => String(b.guardada).localeCompare(String(a.guardada)));
+  if (chip) chip.textContent = String(mias.length);
+  if (!cont) return;
+  const ajenas = todas.length - mias.length;
+  const info = $('#histInfo');
+  if (info) {
+    info.textContent = mias.length
+      ? 'Se guarda solo mientras trabajas. Queda en esta computadora, en tu navegador.' + (ajenas ? ' Hay ' + ajenas + ' de otras personas en este equipo.' : '')
+      : 'Todavía no hay nada guardado. En cuanto cargues una matriz, tu trabajo se guarda solo.';
+    // Cuánto espacio queda, que es lo que limita cuántos trabajos caben
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(e => {
+        if (!e || !e.quota) return;
+        const usado = (e.usage || 0) / 1048576, tope = e.quota / 1048576;
+        info.textContent += ' Ocupado ' + usado.toFixed(0) + ' MB de ' + (tope > 1024 ? (tope / 1024).toFixed(1) + ' GB' : tope.toFixed(0) + ' MB') + '.';
+      }).catch(() => {});
+    }
+  }
+  cont.innerHTML = '';
+  for (const ses of mias) {
+    const fila = document.createElement('div');
+    fila.className = 'hist-item' + (ses.id === sesionActual ? ' hist-actual' : '');
+    const kg = (ses.fotos || []).reduce((n, p) => n + ((p.blob && p.blob.size) || 0), 0);
+    fila.innerHTML = '<div class="hist-txt"><b></b><span class="muted"></span></div>'
+      + '<div class="row-actions">'
+      + '<button class="btn" data-act="abrir">Abrir</button>'
+      + '<button class="btn" data-act="nombre" title="Cambiar el nombre">Renombrar</button>'
+      + '<button class="btn" data-act="exportar" title="Llevártela a otra computadora">Exportar</button>'
+      + '<button class="btn" data-act="borrar">Borrar</button></div>';
+    fila.querySelector('b').textContent = ses.titulo + (ses.id === sesionActual ? '  · abierta ahora' : '');
+    fila.querySelector('.muted').textContent = [
+      cuandoFue(ses.guardada),
+      (ses.piezas || 0) + ' producto' + (ses.piezas === 1 ? '' : 's'),
+      (ses.plantillas || 0) + ' plantilla' + (ses.plantillas === 1 ? '' : 's'),
+      (ses.fotos || []).length + ' foto' + ((ses.fotos || []).length === 1 ? '' : 's') + (kg ? ' (' + (kg / 1048576).toFixed(1) + ' MB)' : ''),
+    ].filter(Boolean).join(' · ');
+    fila.addEventListener('click', async ev => {
+      const b = ev.target.closest('button[data-act]'); if (!b) return;
+      const act = b.dataset.act;
+      if (act === 'abrir') await abrirSesion(ses.id);
+      else if (act === 'exportar') await exportarSesion(ses.id);
+      else if (act === 'nombre') {
+        const n = prompt('¿Cómo quieres llamar a este trabajo?', ses.titulo);
+        if (n && n.trim()) { ses.titulo = n.trim().slice(0, 80); await sesEscribir(ses); pintarHistorial(); }
+      } else if (act === 'borrar') {
+        if (!confirm('¿Borrar «' + ses.titulo + '»? No se puede deshacer.')) return;
+        await sesBorrar(ses.id);
+        if (sesionActual === ses.id) sesionActual = null;
+        pintarHistorial();
+      }
+    });
+    cont.appendChild(fila);
+  }
+}
+
+function cablearHistorial() {
+  const d = $('#dlgHist'), du = $('#dlgUser');
+  $('#btnHist').addEventListener('click', async () => { await pintarHistorial(); if (!d.open) d.showModal(); });
+  $('#dlgHistClose').addEventListener('click', () => d.close());
+  $('#btnUsuario').addEventListener('click', pedirUsuario);
+  $('#histGuardar').addEventListener('click', () => guardarSesion(true));
+  $('#histImport').addEventListener('click', () => $('#fileSes').click());
+  $('#fileSes').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (f) await importarSesion(f);
+  });
+  const entrar = async () => {
+    const v = $('#userNombre').value.trim();
+    if (!v) { $('#userNombre').focus(); return; }
+    du.close(); await fijarUsuario(v);
+  };
+  $('#userOk').addEventListener('click', entrar);
+  $('#userNombre').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); entrar(); } });
+  // Guardar lo que haya antes de cerrar la pestaña
+  window.addEventListener('pagehide', () => { if (!restaurando) guardarSesion(false).catch(() => {}); });
+  leerUsuario().then(async n => {
+    if (n) { await fijarUsuario(n); } else { pedirUsuario(); }
+    pintarHistorial();
+  });
 }
 
 /* ---------- per-row values ---------- */
@@ -3416,7 +3762,7 @@ function matchAssets() {
     r.logoFile = findLogo(marcaDeFila(r)); r.logoError = false;
   });
 }
-function refreshAfterPhotos() { updateSteps(); scheduleThumbs(0); renderEditor(); }
+function refreshAfterPhotos() { updateSteps(); scheduleThumbs(0); renderEditor(); marcarCambio(); }
 function addLogos(files) {
   let n = 0;
   for (const f of files) {
@@ -3440,7 +3786,7 @@ function brandCoverage() {
   return { total: all.length, withLogo: all.filter(x => x.has).length, missing: all.filter(x => !x.has).map(x => x.name) };
 }
 /* Logos persist in this browser (IndexedDB), private to this viewer */
-const IDB_NAME = 'generador-piezas-promo', IDB_STORE = 'logos';
+const IDB_NAME = 'generador-piezas-promo', IDB_STORE = 'logos', IDB_SES = 'sesiones';
 // Cuando cambian los logos que trae la herramienta, los guardados en el navegador que repitan
 // una marca incluida se descartan para que no tapen al nuevo (el Dukare blanco, por ejemplo)
 const LOGOS_VERSION = '2026-10-16-tcl';
@@ -3448,8 +3794,12 @@ const idbReq = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result
 function idbOpen() {
   return new Promise((res, rej) => {
     if (!window.indexedDB) { rej(new Error('Sin IndexedDB')); return; }
-    const r = indexedDB.open(IDB_NAME, 1);
-    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE); };
+    const r = indexedDB.open(IDB_NAME, 2);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      if (!db.objectStoreNames.contains(IDB_SES)) db.createObjectStore(IDB_SES, { keyPath: 'id' });
+    };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
 }
@@ -4312,6 +4662,7 @@ function mandarPlantillaTvWall(obj) {
 }
 function fijarCadena(valor) {
   if (!valor) return;
+  marcarCambio();
   state.cadena = valor;
   const sel = $('#cadenaSel');
   if (sel && [...sel.options].some(o => o.value === valor)) sel.value = valor;
@@ -4673,8 +5024,8 @@ function buildBoard() {
     const rt = computeCtx(row).tpl; if (rt) { cv.width = 60; cv.height = Math.round(60 * rt.height / rt.width); }
     row.el = el;
     const redraw = debounce(() => { renderRowThumb(row); updateSummary(); if (previewRow() === row) renderEditor(); }, 250);
-    el.querySelector('.piece-name').addEventListener('input', e => { row.nombre = e.target.value.trim(); redraw(); });
-    el.querySelector('.include input').addEventListener('change', e => { row.include = e.target.checked; el.classList.toggle('off', !row.include); updateGenerate(); });
+    el.querySelector('.piece-name').addEventListener('input', e => { row.nombre = e.target.value.trim(); redraw(); marcarCambio(); });
+    el.querySelector('.include input').addEventListener('change', e => { row.include = e.target.checked; el.classList.toggle('off', !row.include); updateGenerate(); marcarCambio(); });
     el.querySelector('.thumb').addEventListener('click', () => openPreview(row));
     pintarFormatosDeFila(row, el);
     const mp = el.querySelector('[data-mail]');
@@ -4689,6 +5040,7 @@ function buildBoard() {
     const qt = el.querySelector('[data-quitar]');
     if (qt) qt.addEventListener('click', () => {
       state.rows = state.rows.filter(r => r !== row);
+      marcarCambio();
       buildBoard(); fillPreviewSelect(); updateSteps();
       toast('Deshiciste esa pieza de mailing. Las promociones sueltas siguen ahí.');
     });
@@ -4775,6 +5127,7 @@ function crearMailing() {
   if (!state.cols.tipo) state.cols = detectCols(state.columns);
   for (const r of picks) r.mailPick = false;
   state.rows = state.rows.concat(nuevas);
+  marcarCambio();
   matchAssets();
   buildBoard(); fillPreviewSelect(); updateSteps();
   toast(`Armaste ${nuevas.length} ${nuevas.length === 1 ? 'pieza' : 'piezas'} de mailing con ${picks.length} promociones. Usa {NOMBRE_1}, {PRECIO_1}, {NOMBRE_2}… en la plantilla de mailing.`);
@@ -5885,6 +6238,7 @@ async function init() {
   // es lo que se reescribe cuando se agregan fotos al banco.
   guardarFuente();
   const elVer = $('#verApp'); if (elVer) elVer.textContent = VERSION_APP;
+  cablearHistorial();
   getDownloads().then(dl => {
     if (dl || !hasHost()) return;
     const h = $('#dlHint');
