@@ -1393,7 +1393,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '19 nov 13:13';
+const VERSION_APP = '19 nov 14:00';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -4422,7 +4422,9 @@ function renderPiece(cv, c, opts) {
         : src === 'MODELO#1' ? c.photoLabel
         : /^MODELO#/.test(src) ? 'Esta fila no trae un producto ' + (f.giftIndex || 1)
         : 'Sin ' + src.split('#')[0].replace(/_/g, ' ').toLowerCase() + (f.giftIndex > 1 ? ' ' + f.giftIndex : '');
-      drawImageBox(ctx, f, ph.data, bx, by, bw, bh, opts.placeholder, label, cw / W);
+      // Una caja de regalo 2.º, 3.º... solo se dibuja si la celda trae ese código
+      const sobra = f.giftIndex > 1 && esColumnaRegalo(normalizeKey(f.source || '')) && !ph.code;
+      if (!sobra) drawImageBox(ctx, f, ph.data, bx, by, bw, bh, opts.placeholder, label, cw / W);
       if (src === 'MODELO#1' && f.gifts === true) drawGifts(ctx, f, c, bx, by, bw, bh, opts.placeholder, cw / W);
     }
     else if (f.type === 'logo') drawImageBox(ctx, f, c.logo, bx, by, bw, bh, opts.placeholder, c.logoLabel, cw / W);
