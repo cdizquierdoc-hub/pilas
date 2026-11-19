@@ -1393,7 +1393,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '19 nov 13:10';
+const VERSION_APP = '19 nov 13:13';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
