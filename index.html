@@ -1393,7 +1393,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '19 nov 16:55';
+const VERSION_APP = '22 nov 09:56';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -3706,13 +3706,21 @@ function loadBuiltinLogos() {
 }
 function findLogo(marca) {
   const key = compact(marca); if (!key) return null;
-  if (state.logos.has(key)) return state.logos.get(key);
+  // Un logo que subiste gana siempre al que trae la herramienta, aunque su nombre no sea exactamente la marca (p. ej. "Honor logo.png")
+  const subido = k => !state.builtinLogos.has(k);
+  if (state.logos.has(key) && subido(key)) return state.logos.get(key);
   let best = null, bestLen = Infinity;
-  for (const [k, f] of state.logos) if (k.startsWith(key) && k.length < bestLen) { best = f; bestLen = k.length; }
+  for (const [k, f] of state.logos) if (subido(k) && k.startsWith(key) && k.length < bestLen) { best = f; bestLen = k.length; }
   if (best) return best;
   let best2 = null, len2 = 0;
-  for (const [k, f] of state.logos) if (k.length >= 2 && key.startsWith(k) && k.length > len2) { best2 = f; len2 = k.length; }
-  return best2;
+  for (const [k, f] of state.logos) if (subido(k) && k.length >= 2 && key.startsWith(k) && k.length > len2) { best2 = f; len2 = k.length; }
+  if (best2) return best2;
+  if (state.logos.has(key)) return state.logos.get(key);
+  for (const [k, f] of state.logos) if (k.startsWith(key) && k.length < bestLen) { best = f; bestLen = k.length; }
+  if (best) return best;
+  let best3 = null, len3 = 0;
+  for (const [k, f] of state.logos) if (k.length >= 2 && key.startsWith(k) && k.length > len3) { best3 = f; len3 = k.length; }
+  return best3;
 }
 // Cada caja de foto dice de qué columna toma el código: MODELO por defecto, COD FOTO en combos, REGALO 1, REGALO 2...
 // Cada caja de foto apunta a una columna y, si la celda trae varios códigos, a uno de ellos
@@ -5237,19 +5245,23 @@ function rebuildFilters() {
   bar.hidden = false;
   bar.innerHTML = '<span class="flabel">Ver:</span>' + chips.map(([k, label, n, isAlert]) =>
     `<button type="button" class="fchip${isAlert ? ' alert' : ''}" data-f="${esc(k)}" aria-pressed="${(state.filter || 'all') === k}">${esc(label)} <b>${n}</b></button>`).join('')
-    + ((state.filter && state.filter !== 'all') ? '<button type="button" class="link" id="onlyThese" style="margin-left:6px">Incluir solo estas en la descarga</button>' : '');
+    + ((state.filter && state.filter !== 'all') ? '<button type="button" class="link" id="onlyThese" style="margin-left:6px">Incluir solo estas en la descarga</button>' : '')
+    + (state.rows.some(r => r.include === false) ? '<button type="button" class="link" id="allThese" style="margin-left:6px">Incluir todas en la descarga</button>' : '');
   $$('[data-f]', bar).forEach(b => b.addEventListener('click', () => {
     state.filter = b.dataset.f === state.filter ? 'all' : b.dataset.f;
     rebuildFilters(); applyFilter(); updateSummary();
   }));
-  const only = $('#onlyThese', bar);
-  if (only) only.addEventListener('click', () => {
+  const setIncluir = fn => {
     for (const row of state.rows) {
-      row.include = matchesFilter(row);
+      row.include = fn(row);
       if (row.el) { row.el.classList.toggle('off', !row.include); const cb = row.el.querySelector('.include input'); if (cb) cb.checked = row.include; }
     }
-    updateGenerate();
-  });
+    updateGenerate(); marcarCambio(); rebuildFilters();
+  };
+  const only = $('#onlyThese', bar);
+  if (only) only.addEventListener('click', () => setIncluir(row => matchesFilter(row)));
+  const all = $('#allThese', bar);
+  if (all) all.addEventListener('click', () => setIncluir(() => true));
 }
 function updateSummary() {
   const n = state.rows.length;
