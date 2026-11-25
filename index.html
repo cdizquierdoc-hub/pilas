@@ -1183,7 +1183,8 @@ function nombreCombo(desc, marca, modelo, extra) {
     const fila = catPorCodigo(cods[i] || '');
     const mk = (fila && fila.marca) || marca;
     const ex = fila ? { grupo: fila.grupo || '', subgrupo: fila.sub || '', categoria: '' } : extra;
-    let n = cap1(commercialName(p, mk, cods[i] || '', ex));
+    // La descripción de la matriz ya viene comercial: se usa tal cual, sin reescribirla desde el maestro
+    let n = cap1(String(p).replace(/\s+/g, ' ').trim());
     if (nombres.length) n = cap1(nombreCorto(n));   // del segundo en adelante, versión corta
     if (n && !nombres.includes(n)) nombres.push(n);
   });
@@ -1393,7 +1394,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '24 nov 15:50';
+const VERSION_APP = '25 nov 12:44';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
