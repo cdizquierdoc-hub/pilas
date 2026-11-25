@@ -1394,7 +1394,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '25 nov 13:39';
+const VERSION_APP = '25 nov 13:46';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -3053,9 +3053,9 @@ async function pptxToMatrix(file, onProgress, opciones) {
   condiciones.push(['Cuotas', 'La app separa cuota semanal, cuota mensual y precio de contado según el rótulo de cada lámina. Revisa las filas marcadas en OBSERVACIONES.']);
   condiciones.push(['Combos', 'Cuando una oferta trae varios productos, queda en una sola fila: los grandes en MODELO y los minidomésticos en PROMCIONAL, y la columna TIPO dice COMBO.']);
   condiciones.push(['Revisión', 'Lectura automática de la presentación: antes de publicar, valida precios, cuotas, códigos y regalos contra la fuente original.']);
-  // TV con crédito y contado en la misma oferta (combos Black Friday de Crecos): una fila a crédito y otra a contado.
+  // TV con crédito y contado en la misma oferta (combos Black Friday, cualquier cadena): una fila a crédito y otra a contado.
   // Los combos Black Friday no llevan parlante ni soporte gratis.
-  if (slides.some(sl => (sl.items || []).some(it => /CRECOS/i.test(String(it.text || ''))))) {
+  {
     const partidas = [];
     for (const f of filas) {
       if (f.forma !== 'CREDITO / EFECTIVO' || !/\bTv\b/.test(f.descripcion || '')) { partidas.push(f); continue; }
