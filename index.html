@@ -1382,7 +1382,7 @@ function formatVigencia(raw) {
 
 
 /* === Banco de fotos de producto ==========================================
-   568 fotos en WebP con fondo transparente, comprimidas dentro del archivo.
+   577 fotos en WebP con fondo transparente, comprimidas dentro del archivo.
    Se usan cuando la persona no sube su propia carpeta de fotos.            */
 const FOTOS_B64 = '';
 /* === TV Wall Studio ======================================================
@@ -1394,7 +1394,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '25 nov 12:44';
+const VERSION_APP = '25 nov 13:10';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -1449,6 +1449,97 @@ async function cargarCatalogo() {
 }
 let CAT = null;
 const catPorCodigo = cod => (CAT && CAT.porCodigo.get(compact(cod))) || null;
+const NOMBRE_COMERCIAL = {
+"50U6ESG": "Tv Hisense 50 MiniLED",
+"55U6ESG": "Tv Hisense 55 MiniLED",
+"55QD68SG": "Tv Hisense 55 QLED",
+"65QD68SG": "Tv Hisense 65 QLED",
+"LED55RCA684GT": "Tv RCA 55 LED",
+"QLED75RCA684LN": "Tv RCA 75 QLED",
+"32HDRC": "Tv RCA 32",
+"43FHDRC": "Tv RCA 43",
+"DW-32HDLEC26": "Tv Daewoo 32",
+"DW-43N1LEC26": "Tv Daewoo 43 UHD",
+"DW-65N1QEC26": "Tv Daewoo 65 QLED",
+"32GFS-FISDB": "Tv Philips 32",
+"43GFS-FISDB": "Tv Philips 43",
+"PH-Q55GFU-FISDB": "Tv Philips 55 QLED",
+"PH-Q65GFU-FISDB": "Tv Philips 65 QLED",
+"PH-Q75GFU-FISDB": "Tv Philips 75 QLED",
+"DIG32-HLE02": "Tv Diggio 32",
+"ES-EPIC-RM450": "Parlante England Sound RM450",
+"ES-EPIC-RM26": "Parlante England Sound RM26",
+"ES-EPIC-RM08-FLED": "Parlante England Sound RM08",
+"ES-EPIC-PARTY-6": "Parlante England Sound Party 6",
+"SMCCOMEGAN30N": "Cocina SMC Megan 75 cm 5 quemadores",
+"SMCCOSERENA21N": "Cocina SMC Serena",
+"SMCCOSERENAN1": "Cocina SMC Serena",
+"EM5130FX1": "Cocina a gas Mabe",
+"TX5120EX4": "Cocina a gas Mabe 52 cm 4 quemadores",
+"EM7630FX0": "Cocina a gas Mabe",
+"RMA264PHEU": "Refrigeradora Mabe",
+"RMA244PJEC": "Refrigeradora Mabe",
+"MDRT385MTF28EC2": "Refrigeradora Midea",
+"MSE565QMLSP0": "Refrigeradora Mabe Side by Side",
+"VS25GMIW": "Refrigeradora LG Side by Side 674L Inverter",
+"VS25XHWCB": "Refrigeradora LG Side by Side",
+"RS27T5561B1-ED": "Refrigeradora Samsung Side by Side",
+"30001768": "Refrigeradora Indurama RI 375",
+"LMDX3123HBAB0": "Lavadora Mabe",
+"LMDX8124HBAB0": "Lavadora Mabe",
+"WT20OBTX6T": "Lavadora automática LG 20 KG",
+"MA500W220/G-EC": "Lavadora Midea",
+"WH22DBH570EVAP": "Torre de lavado Samsung 22 KG",
+"7MWGD1900EW": "Secadora Whirlpool",
+"SMCLC2SL": "Licuadora SMC",
+"20006136": "Colchón",
+"CKSTAF11MCDDF-013": "Air fryer Oster",
+"BVSTDC4404-013": "Cafetera Oster",
+"BLST4655-013": "Licuadora Oster",
+"CG120W-012-000": "Wafflera Oster",
+"CKSTRC7030S-013": "Arrocera Oster 12 tazas",
+"BVSTDCS12B-013": "Cafetera Oster",
+"BLSTKAG-BRD-013": "Licuadora Oster negra",
+"2499-013-000": "Batidora de mano Oster",
+"SHN-12530A-QV": "Moto Shineray XY125-30A Caballito",
+"TND-150KBT-QT": "Moto Tundra Kombat 150 Utilitaria",
+"SHN-15015-QV": "Moto Shineray XY150-15 Utilitaria",
+"SHM-150ARMY-QV-W": "Moto SHM Army 150 Doble Propósito",
+"SHN-200THOR-QV-W": "Moto Shineray Thor 200 Doble Propósito",
+"DY-250SCORP-VV-W": "Moto Daytona Scorpion 250 Doble Propósito",
+"BAJ-100CT-VT": "Moto Bajaj CT100ES Utilitaria",
+"BAJ-100PLAT-QT": "Moto Bajaj Platina 100 Utilitaria",
+"SHN-200XY-QT-W": "Moto Shineray XY200-18 Deportiva",
+"DY-150WORFOR-QV": "Moto Daytona Workforce 150 Utilitaria",
+"TND-150GN-QT": "Moto Tundra GN150 Utilitaria",
+"TK-150STRYKE-VV": "Moto Tuko Stryker 150 Utilitaria",
+"ICS-125S-MAX-QV": "Moto ICS 125 Utilitaria",
+"ICS-125CTREVO-QNV": "Moto ICS 125 Caballito",
+"HP 15-FC0250LA": "Laptop HP 15,6 Ryzen 5 8GB 512GB",
+"HP 15-FC0256LA": "Laptop HP 15,6 Ryzen 5 16GB 512GB Azul",
+"HP 15-FC0287LA": "Laptop HP 15,6 Ryzen 7 8GB 512GB Plata",
+"HP 15-FD1258LA": "Laptop HP 15,6 Intel Core i5 8GB 256GB Plata",
+"WL-580": "Impresora HP WL-580 Multifuncional",
+"T430W": "Impresora Brother T430W Multifuncional",
+"L3350": "Impresora Epson L3350 Multifuncional",
+"ST-720": "Impresora HP ST-720 Multifuncional",
+"T530DW": "Impresora Brother T530DW Multifuncional",
+"L1350": "Impresora Epson L1350 Multifuncional",
+"MIR-A17-Q8-256": "Celular Samsung A17 8+256",
+"DU-N15P-F8-256": "Celular Xiaomi Note 15 Pro 8+256",
+"DU-HOT70-D4-256": "Celular Infinix Hot 70 4+256",
+"DU-A7PRO-Q4-128": "Celular Xiaomi A7 Pro 4+128",
+"DU-R17-Q4-256": "Celular Xiaomi Redmi 17 4+256",
+"DU-T10-P4-128": "Celular Honor T10 4+128",
+"DU-X6E-D4-256": "Celular Honor X6E 4+256",
+"DU-SMART20-Q4-256": "Celular Infinix Smart 20 4+256",
+"DU-N17-G6-256": "Celular Xiaomi Note 17 6+256",
+"DU-15C-F8-256": "Celular Xiaomi Redmi 15C 8+256",
+"DU-600ELIT-Q8-256": "Celular Honor 600 Elite 8+256",
+"DU-X7E-L6-256": "Celular Honor X7E 6+256"
+};
+const NOMBRE_COMERCIAL_K = new Map(Object.entries(NOMBRE_COMERCIAL).map(([k, v]) => [k.toUpperCase().replace(/[^A-Z0-9]/g, ''), v]));
+const nombreComercialDe = cod => (cod && NOMBRE_COMERCIAL_K.get(String(cod).toUpperCase().replace(/[^A-Z0-9]/g, ''))) || '';
 // Busca por nombre comercial: "GN150", "ENDURANCE300", "SERENA"...
 // Las motos caso 3 (código terminado en C3) están dañadas: no se publican
 const esCaso3 = cod => /-(C3|EX|C)$/i.test(String(cod || '').trim()); // caso 3, exhibición o dañados
@@ -1741,6 +1832,8 @@ function medidaDelProducto(r, textoLamina) {
 }
 
 function descCatalogo(r, textoLamina) {
+  // Nombre comercial aprobado por César (misma tabla que la matriz): gana sobre el maestro
+  { const nc = nombreComercialDe(r.cod); if (nc) return nc; }
   const G = (r.grupo || '').toUpperCase(), S = (r.sub || '').toUpperCase();
   const M = (MARCA_CORTA[(r.marca || '').toUpperCase()] || MARCA_CORTA[normalizeKey(r.marca || '')] || (r.marca || '')).toUpperCase();
   if (GRUPOS_MOTO.includes(G)) {
@@ -3544,9 +3637,10 @@ function autoTexts(row) {
   const extra = extraDeFila(row);
   const tp = tipoDeFila(row);
   const esCombo = tp === 'combo' || (tp !== 'mailing' && (/^\s*COMBOS?\b/i.test(base) || String(r.MODELO || '').indexOf('+') >= 0));
+  const ncM = esCombo ? '' : nombreComercialDe(r.MODELO).replace(/^Moto\s+/i, '');   // nombre aprobado, sin el "Moto" de la marca
   const autoNombre = esCombo
     ? ((c.nombre && r[c.nombre]) || nombreCombo(base, marca, r.MODELO, extra) || commercialName(base, marca, r.MODELO, extra))
-    : conMedida((c.nombre && r[c.nombre]) ? r[c.nombre] : commercialName(base, marca, r.MODELO, extra), r.MODELO, base);
+    : conMedida(ncM || ((c.nombre && r[c.nombre]) ? r[c.nombre] : commercialName(base, marca, r.MODELO, extra)), r.MODELO, base);
   row._auto = state.autoText
     ? { key, nombre: autoNombre, vigencia: c.vigencia ? formatVigencia(r[c.vigencia]) : '', regalo: c.regalo ? textoRegalo(r[c.regalo]) : '', marca: brandCase(marca) }
     : { key, nombre: base, vigencia: c.vigencia ? r[c.vigencia] : '', regalo: c.regalo ? r[c.regalo] : '', marca };
