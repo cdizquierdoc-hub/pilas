@@ -1064,6 +1064,8 @@ function giftCodes(raw) {
         if (!alguno) add(tok);
       } else add(tok);
     }
+    // Si el tramo completo es el nombre de una foto del banco ("ACEITE GRATIS TODO EL AÑO"), va entero
+    if (out.length === antes && tieneFotoPropia(tramo.trim())) add(tramo.trim());
     // Ningún código del maestro y ninguna foto propia en el tramo: el regalo viene escrito
     // con palabras. "CASCO" y "MATRICULA" tienen su propia foto y mandan sobre el maestro.
     if (!codigoReal && !out.slice(antes).some(c => tieneFotoPropia(c))) {
@@ -1394,7 +1396,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '25 nov 13:46';
+const VERSION_APP = '25 nov 14:50';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
