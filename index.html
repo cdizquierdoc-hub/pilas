@@ -1396,7 +1396,7 @@ const ALIAS_FOTOS = {"POSIBLACKBL-W":"POSIBLACKBL","POSIBLACKRD-W":"POSIBLACKRD"
 // El banco sale de uno de dos lados: embebido aquí mismo (copia suelta, anda sin
 // internet) o de un fotos.zip al lado de la página (sitio web).
 const FOTOS_ARCHIVO = 'fotos.zip';
-const VERSION_APP = '25 nov 14:53';
+const VERSION_APP = '26 nov 10:17';
 const bancoEmbebido = () => !!FOTOS_B64;
 async function abrirZipFotos() {
   if (FOTOS_B64) return JSZip.loadAsync(FOTOS_B64, { base64: true });
@@ -3649,13 +3649,14 @@ function autoTexts(row) {
   const extra = extraDeFila(row);
   const tp = tipoDeFila(row);
   const esCombo = tp === 'combo' || (tp !== 'mailing' && (/^\s*COMBOS?\b/i.test(base) || String(r.MODELO || '').indexOf('+') >= 0));
+  const marcaTxt = esCombo ? (marcasDeFila(row).join(' + ') || marca) : marca;
   const ncM = esCombo ? '' : nombreComercialDe(r.MODELO).replace(/^Moto\s+/i, '');   // nombre aprobado, sin el "Moto" de la marca
   const autoNombre = esCombo
     ? ((c.nombre && r[c.nombre]) || nombreCombo(base, marca, r.MODELO, extra) || commercialName(base, marca, r.MODELO, extra))
     : conMedida(ncM || ((c.nombre && r[c.nombre]) ? r[c.nombre] : commercialName(base, marca, r.MODELO, extra)), r.MODELO, base);
   row._auto = state.autoText
-    ? { key, nombre: autoNombre, vigencia: c.vigencia ? formatVigencia(r[c.vigencia]) : '', regalo: c.regalo ? textoRegalo(r[c.regalo]) : '', marca: brandCase(marca) }
-    : { key, nombre: base, vigencia: c.vigencia ? r[c.vigencia] : '', regalo: c.regalo ? r[c.regalo] : '', marca };
+    ? { key, nombre: autoNombre, vigencia: c.vigencia ? formatVigencia(r[c.vigencia]) : '', regalo: c.regalo ? textoRegalo(r[c.regalo]) : '', marca: brandCase(marcaTxt) }
+    : { key, nombre: base, vigencia: c.vigencia ? r[c.vigencia] : '', regalo: c.regalo ? r[c.regalo] : '', marca: marcaTxt };
   return row._auto;
 }
 function computeCtx(row) {
@@ -3713,10 +3714,13 @@ function computeCtx(row) {
     photoBy[k] = { code: ph.code, file: ph.file, data: ph.file ? (state.assetData.get(ph.file) || null) : null };
   }
   const photo = (photoBy['MODELO#1'] && photoBy['MODELO#1'].data) || null;
-  const marca = marcaDeFila(row);
-  const logo = row.logoFile ? (state.assetData.get(row.logoFile) || null) : null;
+  const marcas = marcasDeFila(row);
+  const marca = marcas.join(' + ');
+  const logos = marcas.map((m, i) => { const f = (row.logoFiles || [])[i]; return f ? (state.assetData.get(f) || null) : null; });
+  const logo = logos[0] || null;
+  const logoLabels = marcas.map(m => 'Falta el logo de ' + m);
   const fields = row.custom && row.custom.tpl === tpl ? row.custom.fields : null;
-  return { tpl, fields, vars, esCredito, semanal, principal, forma, tipo, photo, photoBy, gifts, photoLabel: 'Falta la foto de ' + r.MODELO, marca, logo, logoLabel: marca ? 'Falta el logo de ' + marca : 'Sin MARCA en la matriz' };
+  return { tpl, fields, vars, esCredito, semanal, principal, forma, tipo, photo, photoBy, gifts, photoLabel: 'Falta la foto de ' + r.MODELO, marca, logo, logos, logoLabels, logoLabel: marca ? 'Falta el logo de ' + marca : 'Sin MARCA en la matriz' };
 }
 function emptyCtx() {
   return { tpl: state.template, vars: { NOMBRE: 'Nombre del producto', PRECIO: '$999,00', PRECIO_ENTERO: '$999', PRECIO_CENTAVOS: ',00', PLAZO: '36', CUOTA: '$99,00', FRECUENCIA: 'mensuales', MODELO: 'MODELO', MARCA: 'Marca', REGALO: 'Regalo', VIGENCIA: 'del 1 al 30 de septiembre' }, esCredito: false, principal: 999, forma: '', photo: null, photoBy: {}, photoLabel: 'Foto del producto', marca: '', logo: null, logoLabel: 'Logo de la marca' };
@@ -3754,8 +3758,10 @@ function rowAlerts(row, c) {
   if (!c.forma && c.tipo !== 'mailing') a.push('Sin forma de pago');
   const usesLogo = (c.fields || (c.tpl && c.tpl.fields) || []).some(f => f.type === 'logo' && (f.show === 'always' || (f.show === 'credito') === c.esCredito));
   if (usesLogo) {
-    if (!marcaDeFila(row)) a.push('Sin MARCA');
-    else if (!row.logoFile) a.push('Sin logo');
+    const marcas = marcasDeFila(row);
+    const sinLogo = marcas.filter((m, i) => !(row.logoFiles || [])[i]);
+    if (!marcas.length) a.push('Sin MARCA');
+    else if (sinLogo.length) a.push('Sin logo' + (marcas.length > 1 ? ' de ' + sinLogo.join(' y ') : ''));
     else if (row.logoError) a.push('No se pudo leer el logo' + (row.logoBad ? ' ' + row.logoBad : ''));
   }
   return a;
@@ -3888,6 +3894,23 @@ function marcaDeFila(row) {
   for (const cod of cods) { const m = marcaDe('', cod); if (m) return m; }
   return '';
 }
+// En un combo cada producto trae su marca: "HISENSE + ENGLAND SOUND". Hay un logo por marca, en el orden de los códigos.
+function esComboFila(row) {
+  return tipoDeFila(row) === 'combo' || String(row.raw.MODELO || '').indexOf('+') >= 0;
+}
+function marcasDeFila(row) {
+  if (!esComboFila(row)) { const m = marcaDeFila(row); return m ? [m] : []; }
+  const cods = String(row.raw.MODELO || '').split(/[\s+\n,;]+/).filter(Boolean);
+  const out = [], vistas = new Set();
+  for (const cod of cods) {
+    const f = catPorCodigo(cod);
+    const m = (f && f.marca) || marcaDe('', cod) || '';
+    const k = compact(m);
+    if (k && !vistas.has(k)) { vistas.add(k); out.push(m); }
+  }
+  if (!out.length) { const m = marcaDeFila(row); if (m) out.push(m); }
+  return out;
+}
 // Grupo, subgrupo y categoría: si la matriz no los trae, también los sabe el maestro
 function extraDeFila(row) {
   const c = state.cols || {}, r = row.raw;
@@ -3901,7 +3924,8 @@ function extraDeFila(row) {
 function matchAssets() {
   state.rows.forEach(r => {
     r.photoFile = findPhoto(r.raw.MODELO); r.photoError = false;
-    r.logoFile = findLogo(marcaDeFila(r)); r.logoError = false;
+    r.logoFiles = marcasDeFila(r).map(m => findLogo(m) || null);
+    r.logoFile = r.logoFiles[0] || null; r.logoError = false;
   });
 }
 function refreshAfterPhotos() { updateSteps(); scheduleThumbs(0); renderEditor(); marcarCambio(); }
@@ -4253,6 +4277,7 @@ async function ensureRowAssets(row) {
       const mc = state.cols && state.cols.marca;
       const marcaFila = mc ? row.raw[mc] : '';
       const key = compact(marcaFila);
+      const malo = row.logoFile;
       row.logoBad = (row.logoFile && row.logoFile.name) || '';
       for (const [k2, f2] of state.logos) if (f2 === row.logoFile) { state.logos.delete(k2); state.builtinLogos.delete(k2); }
       let bueno = null;
@@ -4269,10 +4294,11 @@ async function ensureRowAssets(row) {
         const otro = findLogo(marcaFila);
         if (otro && otro !== row.logoFile) { try { await ensureAsset(otro, 1600); bueno = otro; } catch (e3) {} }
       }
-      if (bueno) { row.logoFile = bueno; row.logoError = false; }
+      if (bueno) { row.logoFile = bueno; row.logoError = false; if (row.logoFiles) row.logoFiles = row.logoFiles.map(f => (f && f === malo) ? bueno : f); }
       else row.logoError = true;
     }
   }
+  for (const f of (row.logoFiles || [])) { if (f && f !== row.logoFile) { try { await ensureAsset(f, 1600); } catch (e) {} } }
   for (const g of giftFilesOf(row)) { try { await ensureAsset(g, 2000); } catch (e) {} }
 }
 function giftFilesOf(row) {
@@ -4280,7 +4306,7 @@ function giftFilesOf(row) {
   if (!c.regalo) return [];
   return giftCodes(row.raw[c.regalo]).map(findPhoto).filter(Boolean);
 }
-const rowAssetsReady = row => photoSources().every(k => { const f = photoFor(row, k).file; return !f || state.assetData.has(f); }) && (!row.photoFile || row.photoError || state.assetData.has(row.photoFile)) && (!row.logoFile || row.logoError || state.assetData.has(row.logoFile)) && giftFilesOf(row).every(g => state.assetData.has(g));
+const rowAssetsReady = row => photoSources().every(k => { const f = photoFor(row, k).file; return !f || state.assetData.has(f); }) && (!row.photoFile || row.photoError || state.assetData.has(row.photoFile)) && (!row.logoFile || row.logoError || state.assetData.has(row.logoFile)) && (row.logoFiles || []).every(f => !f || row.logoError || state.assetData.has(f)) && giftFilesOf(row).every(g => state.assetData.has(g));
 
 /* ---------- fonts ---------- */
 const loadedFaces = new Set();
@@ -4518,6 +4544,7 @@ function renderPiece(cv, c, opts) {
   else { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); }
   const warns = [];
   const fields = opts.tpl ? t.fields : (c.fields || t.fields);
+  let logoN = 0;
   for (const f of fields) {
     if (f.show === 'credito' && !c.esCredito) continue;
     if (f.show === 'contado' && c.esCredito) continue;
@@ -4542,7 +4569,12 @@ function renderPiece(cv, c, opts) {
       if (!sobra) drawImageBox(ctx, f, ph.data, bx, by, bw, bh, opts.placeholder, label, cw / W);
       if (src === 'MODELO#1' && f.gifts === true) drawGifts(ctx, f, c, bx, by, bw, bh, opts.placeholder, cw / W);
     }
-    else if (f.type === 'logo') drawImageBox(ctx, f, c.logo, bx, by, bw, bh, opts.placeholder, c.logoLabel, cw / W);
+    else if (f.type === 'logo') {
+      const i = logoN++, multi = !!(c.logos && c.logos.length > 1);
+      const lg = multi ? (c.logos[i] || null) : c.logo;
+      const lb = multi ? (c.logoLabels[i] || c.logoLabel) : c.logoLabel;
+      drawImageBox(ctx, f, lg, bx, by, bw, bh, opts.placeholder, lb, cw / W);
+    }
     else {
       ctx.save(); const r = drawText(ctx, f, c.vars, bx, by, bw, bh); ctx.restore();
       if (r) { if (!r.fits) warns.push('No cabe: ' + f.label); else if (r.ratio < 0.7) warns.push('Texto reducido: ' + f.label); }
